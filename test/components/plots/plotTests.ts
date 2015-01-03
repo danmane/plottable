@@ -23,7 +23,7 @@ describe("Plots", () => {
       var r = new Plottable.Plot.AbstractPlot();
       r._anchor(svg);
       r._computeLayout();
-      var renderArea = r._content.select(".render-area");
+      var renderArea = (<any> r)._content.select(".render-area");
       assert.isNotNull(renderArea.node(), "there is a render-area");
       svg.remove();
     });
@@ -85,9 +85,6 @@ describe("Plots", () => {
       assert.equal(1, xScaleCalls, "X scale was wired up to datasource correctly");
       assert.equal(1, yScaleCalls, "Y scale was wired up to datasource correctly");
 
-      var metaProjector = r._generateAttrToProjector()["meta"];
-      assert.equal(metaProjector(null, 0), "bar", "plot projector used the right metadata");
-
       var d2 = new Plottable.Dataset([{x: 7, y: 8}], {cssClass: "boo"});
       r.removeDataset("d1");
       r.addDataset(d2);
@@ -101,9 +98,6 @@ describe("Plots", () => {
       d2.broadcaster.broadcast();
       assert.equal(4, xScaleCalls, "X scale was hooked into new datasource");
       assert.equal(4, yScaleCalls, "Y scale was hooked into new datasource");
-
-      metaProjector = r._generateAttrToProjector()["meta"];
-      assert.equal(metaProjector(null, 0), "boo", "plot projector used the right metadata");
 
     });
 
@@ -119,9 +113,9 @@ describe("Plots", () => {
       var r = new Plottable.Plot.AbstractPlot();
       var s = new Plottable.Scale.Linear().domain([0, 1]).range([0, 10]);
       r.project("attr", "a", s);
-      var attrToProjector = r._generateAttrToProjector();
+      var attrToProjector = (<any> r)._generateAttrToProjector();
       var projector = attrToProjector["attr"];
-      assert.equal(projector({"a": 0.5}, 0), 5, "projector works as intended");
+      assert.equal(projector({"a": 0.5}, 0, null, null), 5, "projector works as intended");
     });
 
     it("Changing Plot.dataset().data to [] causes scale to contract", () => {
@@ -213,7 +207,7 @@ describe("Plots", () => {
       var s = new Plottable.Scale.Linear();
       r.project("attr", "a", s);
       r.remove();
-      var key2callback = (<any> s).broadcaster.key2callback;
+      var key2callback = (<any> s).broadcaster._key2callback;
       assert.isUndefined(key2callback.get(r), "the plot is no longer attached to the scale");
     });
 
@@ -267,12 +261,33 @@ describe("Plots", () => {
       var additionalPaint = (x: number) => {
         recordedTime = Math.max(x, recordedTime);
       };
-      plot._additionalPaint = additionalPaint;
+      (<any> plot)._additionalPaint = additionalPaint;
       plot.animator("bars", animator);
       var svg = generateSVG();
+      plot.project("x", "x", x);
+      plot.project("y", "y", y);
       plot.renderTo(svg);
       svg.remove();
       assert.equal(recordedTime, 20, "additionalPaint passed appropriate time argument");
+    });
+
+    it("extent calculation done in correct dataset order", () => {
+      var animator = new Plottable.Animator.Base().delay(10).duration(10).maxIterativeDelay(0);
+      var ordinalScale = new Plottable.Scale.Ordinal();
+      var dataset1 = [{key: "A"}];
+      var dataset2 = [{key: "B"}];
+      var plot = new Plottable.Plot.AbstractPlot()
+                                   .addDataset("b", dataset2)
+                                   .addDataset("a", dataset1);
+      plot.project("key", "key", ordinalScale);
+
+      plot.datasetOrder(["a", "b"]);
+
+      var svg = generateSVG();
+      plot.renderTo(svg);
+
+      assert.deepEqual(ordinalScale.domain(), ["A", "B"], "extent is in the right order");
+      svg.remove();
     });
   });
 
@@ -286,13 +301,13 @@ describe("Plots", () => {
     var plot: Plottable.Plot.AbstractXYPlot<number, number>;
 
     before(() => {
-      xAccessor = (d: any) => d.a;
-      yAccessor = (d: any) => d.b;
+      xAccessor = (d: any, i: number, u: any) => d.a + u.foo;
+      yAccessor = (d: any, i: number, u: any) => d.b + u.foo;
     });
 
     beforeEach(() => {
       svg = generateSVG(500, 500);
-      simpleDataset = new Plottable.Dataset([{a: -5, b: 6}, {a: -2, b: 2}, {a: 2, b: -2}, {a: 5, b: -6}]);
+      simpleDataset = new Plottable.Dataset([{a: -5, b: 6}, {a: -2, b: 2}, {a: 2, b: -2}, {a: 5, b: -6}], {foo: 0});
       xScale = new Plottable.Scale.Linear();
       yScale = new Plottable.Scale.Linear();
       plot = new Plottable.Plot.AbstractXYPlot(xScale, yScale);
@@ -375,10 +390,10 @@ describe("Plots", () => {
     it("listeners are deregistered after removal", () => {
       plot.automaticallyAdjustYScaleOverVisiblePoints(true);
       plot.remove();
-      var key2callback = (<any> xScale).broadcaster.key2callback;
-      assert.isUndefined(key2callback.get("yDomainAdjustment" + plot._plottableID), "the plot is no longer attached to the xScale");
-      key2callback = (<any> yScale).broadcaster.key2callback;
-      assert.isUndefined(key2callback.get("xDomainAdjustment" + plot._plottableID), "the plot is no longer attached to the yScale");
+      var key2callback = (<any> xScale).broadcaster._key2callback;
+      assert.isUndefined(key2callback.get("yDomainAdjustment" + plot.getID()), "the plot is no longer attached to the xScale");
+      key2callback = (<any> yScale).broadcaster._key2callback;
+      assert.isUndefined(key2callback.get("xDomainAdjustment" + plot.getID()), "the plot is no longer attached to the yScale");
       svg.remove();
     });
 

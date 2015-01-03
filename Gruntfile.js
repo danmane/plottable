@@ -13,7 +13,7 @@ module.exports = function(grunt) {
         noImplicitAny: true,
         sourceMap: false,
         declaration: true,
-        compiler: "./node_modules/grunt-ts/customcompiler/tsc",
+        compiler: "./node_modules/typescript/bin/tsc",
         removeComments: false
       }
     },
@@ -26,12 +26,12 @@ module.exports = function(grunt) {
         sourceMap: false,
         noImplicitAny: true,
         declaration: false,
-        compiler: "./node_modules/grunt-ts/customcompiler/tsc",
+        compiler: "./node_modules/typescript/bin/tsc",
         removeComments: false
       }
     },
     verify_d_ts: {
-      src: ["typings/d3/d3.d.ts", "plottable.d.ts"]
+      src: ["typings/d3/d3.d.ts", "plottable.d.ts", "bower_components/svg-typewriter/svgtypewriter.d.ts"]
     }
   };
 
@@ -174,6 +174,10 @@ module.exports = function(grunt) {
           }),
         dest: "build/plottable.d.ts",
       },
+      svgtypewriter: {
+        src: ["plottable.js", "bower_components/svg-typewriter/svgtypewriter.js"],
+        dest: "plottable.js",
+      },
     },
     ts: tsJSON,
     tslint: {
@@ -223,6 +227,10 @@ module.exports = function(grunt) {
       "tests": {
         "tasks": ["test-compile"],
         "files": ["test/**/*.ts"]
+      },
+      "quicktests": {
+        "tasks": ["update-qt"],
+        "files": ["quicktests/overlaying/tests/**/*.js"]
       }
     },
     blanket_mocha: {
@@ -324,6 +332,7 @@ module.exports = function(grunt) {
       "update_test_ts_files",
       "ts:dev",
       "concat:plottable",
+      "concat:svgtypewriter",
       "concat:definitions",
       "sed:definitions",
       "sed:private_definitions",
@@ -333,7 +342,8 @@ module.exports = function(grunt) {
       "test-compile",
       "concat:plottable_multifile",
       "sed:plottable_multifile",
-      "clean:tscommand"
+      "clean:tscommand",
+      "update-qt"
   ];
 
   grunt.registerTask("dev-compile", compile_task);
@@ -368,5 +378,18 @@ module.exports = function(grunt) {
                                   "shell:sublime",
                                   "sed:sublime",
                                   ]);
+
+  var updateQuickTestsJSON = function() {
+    var qtJSON = [];
+    var rawtests = grunt.file.expand("quicktests/overlaying/tests/**/*.js");
+    rawtests.forEach(function(value, index, array){
+      qtJSON.push({path: value});
+    });
+    qtJSON = JSON.stringify(qtJSON);
+    qtJSON = qtJSON.split(",").join(",\n") + "\n";
+    grunt.file.write("quicktests/overlaying/list_of_quicktests.json", qtJSON);
+  };
+
+  grunt.registerTask("update-qt", updateQuickTestsJSON);
 
 };

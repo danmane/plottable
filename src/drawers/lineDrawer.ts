@@ -3,15 +3,15 @@
 module Plottable {
 export module _Drawer {
   export class Line extends AbstractDrawer {
-    private pathSelection: D3.Selection;
+    private _pathSelection: D3.Selection;
 
-    public _enterData(data: any[]) {
+    protected _enterData(data: any[]) {
       super._enterData(data);
-      this.pathSelection.datum(data);
+      this._pathSelection.datum(data);
     }
 
     public setup(area: D3.Selection) {
-      this.pathSelection = area.append("path")
+      this._pathSelection = area.append("path")
                                .classed("line", true)
                                .style({
                                  "fill": "none",
@@ -20,9 +20,9 @@ export module _Drawer {
       super.setup(area);
     }
 
-    private createLine(xFunction: AppliedAccessor, yFunction: AppliedAccessor, definedFunction: (d: any, i: number) => boolean) {
+    private _createLine(xFunction: _AppliedProjector, yFunction: _AppliedProjector, definedFunction: _AppliedProjector) {
       if(!definedFunction) {
-        definedFunction = () => true;
+        definedFunction = (d, i) => true;
       }
 
       return d3.svg.line()
@@ -31,28 +31,28 @@ export module _Drawer {
                    .defined(definedFunction);
     }
 
-    public _numberOfAnimationIterations(data: any[]): number {
+    protected _numberOfAnimationIterations(data: any[]): number {
       return 1;
     }
 
-    public _drawStep(step: DrawStep) {
+    protected _drawStep(step: AppliedDrawStep) {
       var baseTime = super._drawStep(step);
-      var attrToProjector = <AttributeToProjector>_Util.Methods.copyMap(step.attrToProjector);
+      var attrToProjector = <_AttributeToAppliedProjector>_Util.Methods.copyMap(step.attrToProjector);
       var xFunction       = attrToProjector["x"];
       var yFunction       = attrToProjector["y"];
       var definedFunction = attrToProjector["defined"];
       delete attrToProjector["x"];
       delete attrToProjector["y"];
-
-      attrToProjector["d"] = this.createLine(xFunction, yFunction, attrToProjector["defined"]);
       if (attrToProjector["defined"]) {
         delete attrToProjector["defined"];
       }
 
+      attrToProjector["d"] = this._createLine(xFunction, yFunction, definedFunction);
+
       if (attrToProjector["fill"]) {
-        this.pathSelection.attr("fill", attrToProjector["fill"]); // so colors don't animate
+        this._pathSelection.attr("fill", attrToProjector["fill"]); // so colors don't animate
       }
-      step.animator.animate(this.pathSelection, attrToProjector);
+      step.animator.animate(this._pathSelection, attrToProjector);
     }
   }
 }

@@ -3,7 +3,7 @@
 module Plottable {
 export module _Drawer {
   export class Element extends AbstractDrawer {
-    public _svgElement: string;
+    protected _svgElement: string;
 
     /**
      * Sets the svg element, which needs to be bind to data
@@ -15,11 +15,11 @@ export module _Drawer {
       return this;
     }
 
-    public _getDrawSelection() {
-      return this._renderArea.selectAll(this._svgElement);
+    private _getDrawSelection() {
+      return this._getRenderArea().selectAll(this._svgElement);
     }
 
-    public _drawStep(step: DrawStep) {
+    protected _drawStep(step: AppliedDrawStep) {
       super._drawStep(step);
       var drawSelection = this._getDrawSelection();
       if (step.attrToProjector["fill"]) {
@@ -28,7 +28,7 @@ export module _Drawer {
       step.animator.animate(drawSelection, step.attrToProjector);
     }
 
-    public _enterData(data: any[]) {
+    protected _enterData(data: any[]) {
       super._enterData(data);
       var dataElements = this._getDrawSelection().data(data);
       dataElements.enter().append(this._svgElement);
@@ -38,26 +38,23 @@ export module _Drawer {
       dataElements.exit().remove();
     }
 
-    private filterDefinedData(data: any[], definedFunction: (d: any, i: number) => boolean): any[] {
+    private _filterDefinedData(data: any[], definedFunction: (d: any, i: number) => boolean): any[] {
       return definedFunction ? data.filter(definedFunction) : data;
     }
 
-    public draw(data: any[], drawSteps: DrawStep[]): number {
-      var modifiedDrawSteps: DrawStep[] = [];
-      drawSteps.forEach((d: DrawStep, i: number) => {
-        modifiedDrawSteps[i] = {animator: d.animator, attrToProjector: _Util.Methods.copyMap(d.attrToProjector)};
-      });
-
-      var definedData: any[] = modifiedDrawSteps.reduce((data: any[], drawStep: DrawStep) =>
-                                this.filterDefinedData(data, drawStep.attrToProjector["defined"]), data);
-
-      modifiedDrawSteps.forEach((d: DrawStep) => {
+    // HACKHACK To prevent populating undesired attribute to d3, we delete them here.
+    protected _prepareDrawSteps(drawSteps: AppliedDrawStep[]) {
+      super._prepareDrawSteps(drawSteps);
+      drawSteps.forEach((d: DrawStep) => {
         if (d.attrToProjector["defined"]) {
           delete d.attrToProjector["defined"];
         }
       });
+    }
 
-      return super.draw(definedData, modifiedDrawSteps);
+    protected _prepareData(data: any[], drawSteps: AppliedDrawStep[]) {
+      return drawSteps.reduce((data: any[], drawStep: AppliedDrawStep) =>
+              this._filterDefinedData(data, drawStep.attrToProjector["defined"]), super._prepareData(data, drawSteps));
     }
   }
 }

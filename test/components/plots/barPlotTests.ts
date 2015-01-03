@@ -28,11 +28,13 @@ describe("Plots", () => {
         barPlot.animate(false);
         barPlot.baseline(0);
         yScale.domain([-2, 2]);
+        barPlot.project("x", "x", xScale);
+        barPlot.project("y", "y", yScale);
         barPlot.renderTo(svg);
       });
 
       it("renders correctly", () => {
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         assert.lengthOf(bars[0], 3, "One bar was created per data point");
         var bar0 = d3.select(bars[0][0]);
@@ -57,7 +59,7 @@ describe("Plots", () => {
       it("baseline value can be changed; barPlot updates appropriately", () => {
         barPlot.baseline(-1);
 
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
@@ -76,7 +78,7 @@ describe("Plots", () => {
 
       it("bar alignment can be changed; barPlot updates appropriately", () => {
         barPlot.barAlignment("center");
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
@@ -86,7 +88,7 @@ describe("Plots", () => {
         assert.equal(numAttr(bar1, "x"), 375, "bar1 x is correct");
 
         barPlot.barAlignment("right");
-        renderArea = barPlot._renderArea;
+        renderArea = (<any> barPlot)._renderArea;
         bars = renderArea.selectAll("rect");
         bar0 = d3.select(bars[0][0]);
         bar1 = d3.select(bars[0][1]);
@@ -96,73 +98,45 @@ describe("Plots", () => {
         assert.equal(numAttr(bar1, "x"), 300, "bar1 x is correct");
 
         assert.throws(() => barPlot.barAlignment("blargh"), Error);
-        assert.equal(barPlot._barAlignmentFactor, 1, "the bad barAlignment didnt break internal state");
+        assert.equal((<any> barPlot)._barAlignmentFactor, 1, "the bad barAlignment didnt break internal state");
         svg.remove();
       });
 
-      it("can select and deselect bars", () => {
-        var selectedBar: D3.Selection = barPlot.selectBar(155, 150); // in the middle of bar 0
+      it("getBar()", () => {
+        var bar: D3.Selection = barPlot.getBars(155, 150); // in the middle of bar 0
 
-        assert.isNotNull(selectedBar, "clicked on a bar");
-        assert.equal(selectedBar.data()[0], dataset.data()[0], "the data in the bar matches the datasource");
-        assert.isTrue(selectedBar.classed("selected"), "the bar was classed \"selected\"");
+        assert.lengthOf(bar[0], 1, "getBar returns a bar");
+        assert.equal(bar.data()[0], dataset.data()[0], "the data in the bar matches the datasource");
 
-        barPlot.deselectAll();
-        assert.isFalse(selectedBar.classed("selected"), "the bar is no longer selected");
+        bar = barPlot.getBars(-1, -1); // no bars here
+        assert.isTrue(bar.empty(), "returns empty selection if no bar was selected");
 
-        selectedBar = barPlot.selectBar(-1, -1); // no bars here
-        assert.isNull(selectedBar, "returns null if no bar was selected");
+        bar = barPlot.getBars(200, 50); // between the two bars
+        assert.isTrue(bar.empty(), "returns empty selection if no bar was selected");
 
-        selectedBar = barPlot.selectBar(200, 50); // between the two bars
-        assert.isNull(selectedBar, "returns null if no bar was selected");
-
-        selectedBar = barPlot.selectBar(155, 10); // above bar 0
-        assert.isNull(selectedBar, "returns null if no bar was selected");
+        bar = barPlot.getBars(155, 10); // above bar 0
+        assert.isTrue(bar.empty(), "returns empty selection if no bar was selected");
 
         // the bars are now (140,100),(150,300) and (440,300),(450,350) - the
         // origin is at the top left!
 
-        selectedBar = barPlot.selectBar({min: 155, max: 455}, {min: 150, max: 150}, true);
-        assert.isNotNull(selectedBar, "line between middle of two bars");
-        assert.lengthOf(selectedBar.data(), 2, "selected 2 bars (not the negative one)");
-        assert.equal(selectedBar.data()[0], dataset.data()[0], "the data in bar 0 matches the datasource");
-        assert.equal(selectedBar.data()[1], dataset.data()[2], "the data in bar 1 matches the datasource");
-        assert.isTrue(selectedBar.classed("selected"), "the bar was classed \"selected\"");
+        bar = barPlot.getBars({min: 155, max: 455}, {min: 150, max: 150});
+        assert.lengthOf(bar.data(), 2, "selected 2 bars (not the negative one)");
+        assert.equal(bar.data()[0], dataset.data()[0], "the data in bar 0 matches the datasource");
+        assert.equal(bar.data()[1], dataset.data()[2], "the data in bar 1 matches the datasource");
 
-        selectedBar = barPlot.selectBar({min: 155, max: 455}, {min: 150, max: 350}, true);
-        assert.isNotNull(selectedBar, "square between middle of two bars, & over the whole area");
-        assert.lengthOf(selectedBar.data(), 3, "selected all the bars");
-        assert.equal(selectedBar.data()[0], dataset.data()[0], "the data in bar 0 matches the datasource");
-        assert.equal(selectedBar.data()[1], dataset.data()[1], "the data in bar 1 matches the datasource");
-        assert.equal(selectedBar.data()[2], dataset.data()[2], "the data in bar 2 matches the datasource");
-        assert.isTrue(selectedBar.classed("selected"), "the bar was classed \"selected\"");
-
-        // the runtime parameter validation should be strict, so no strings or
-        // mangled objects
-        assert.throws(() => barPlot.selectBar(<any> "blargh", <any> 150), Error);
-        assert.throws(() => barPlot.selectBar(<any> {min: 150}, <any> 150), Error);
-
-        svg.remove();
-      });
-
-      it("shouldn't blow up if members called before the first render", () => {
-        var brandNew = new Plottable.Plot.VerticalBar(xScale, yScale);
-        brandNew.addDataset(dataset);
-
-        assert.isNotNull(brandNew.deselectAll(), "deselects return self");
-        assert.isNull(brandNew.selectBar(0, 0), "selects return empty");
-
-        brandNew._anchor(d3.select(document.createElement("svg"))); // calls `_setup()`
-
-        assert.isNotNull(brandNew.deselectAll(), "deselects return self after setup");
-        assert.isNull(brandNew.selectBar(0, 0), "selects return empty after setup");
+        bar = barPlot.getBars({min: 155, max: 455}, {min: 150, max: 350});
+        assert.lengthOf(bar.data(), 3, "selected all the bars");
+        assert.equal(bar.data()[0], dataset.data()[0], "the data in bar 0 matches the datasource");
+        assert.equal(bar.data()[1], dataset.data()[1], "the data in bar 1 matches the datasource");
+        assert.equal(bar.data()[2], dataset.data()[2], "the data in bar 2 matches the datasource");
 
         svg.remove();
       });
 
       it("don't show points from outside of domain", () => {
         xScale.domain(["C"]);
-        var bars =  barPlot._renderArea.selectAll("rect");
+        var bars =  (<any> barPlot)._renderArea.selectAll("rect");
         assert.lengthOf(bars[0], 0, "no bars have been rendered");
         svg.remove();
       });
@@ -192,20 +166,22 @@ describe("Plots", () => {
         barPlot.animate(false);
         barPlot.baseline(0);
         yScale.domain([-2, 2]);
+        barPlot.project("x", "x", xScale);
+        barPlot.project("y", "y", yScale);
         barPlot.renderTo(svg);
       });
 
       it("barPixelWidth calculated appropriately", () => {
-        assert.strictEqual(barPlot._getBarPixelWidth(), (xScale.scale(10) - xScale.scale(2)) * 0.95);
+        assert.strictEqual((<any> barPlot)._getBarPixelWidth(), (xScale.scale(10) - xScale.scale(2)) * 0.95);
         svg.remove();
       });
 
       it("bar widths are equal to barPixelWidth", () => {
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         assert.lengthOf(bars[0], 3, "One bar was created per data point");
 
-        var barPixelWidth = barPlot._getBarPixelWidth();
+        var barPixelWidth = (<any> barPlot)._getBarPixelWidth();
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
         var bar2 = d3.select(bars[0][2]);
@@ -238,20 +214,22 @@ describe("Plots", () => {
         barPlot = new Plottable.Plot.VerticalBar(xScale, yScale);
         barPlot.addDataset(dataset);
         barPlot.baseline(0);
+        barPlot.project("x", "x", xScale);
+        barPlot.project("y", "y", yScale);
         barPlot.renderTo(svg);
       });
 
       it("bar width takes an appropriate value", () => {
-        assert.strictEqual(barPlot._getBarPixelWidth(), (xScale.scale(10) - xScale.scale(2)) * 0.95);
+        assert.strictEqual((<any> barPlot)._getBarPixelWidth(), (xScale.scale(10) - xScale.scale(2)) * 0.95);
         svg.remove();
       });
 
       it("bar widths are equal to barPixelWidth", () => {
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         assert.lengthOf(bars[0], 3, "One bar was created per data point");
 
-        var barPixelWidth = barPlot._getBarPixelWidth();
+        var barPixelWidth = (<any> barPlot)._getBarPixelWidth();
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
         var bar2 = d3.select(bars[0][2]);
@@ -264,14 +242,14 @@ describe("Plots", () => {
       it("sensible bar width one datum", () => {
         barPlot.removeDataset(dataset);
         barPlot.addDataset([{x: 10, y: 2}]);
-        assert.closeTo(barPlot._getBarPixelWidth(), 228, 0.1, "sensible bar width for only one datum");
+        assert.closeTo((<any> barPlot)._getBarPixelWidth(), 228, 0.1, "sensible bar width for only one datum");
         svg.remove();
       });
 
       it("sensible bar width same datum", () => {
         barPlot.removeDataset(dataset);
         barPlot.addDataset([{x: 10, y: 2}, {x: 10, y: 2}]);
-        assert.closeTo(barPlot._getBarPixelWidth(), 228, 0.1, "uses the width sensible for one datum");
+        assert.closeTo((<any> barPlot)._getBarPixelWidth(), 228, 0.1, "uses the width sensible for one datum");
         svg.remove();
       });
 
@@ -279,7 +257,7 @@ describe("Plots", () => {
         barPlot.removeDataset(dataset);
         barPlot.addDataset([{x: 2, y: 2}, {x: 20, y: 2}, {x: 5, y: 2}]);
         var expectedBarPixelWidth = (xScale.scale(5) - xScale.scale(2)) * 0.95;
-        assert.closeTo(barPlot._getBarPixelWidth(), expectedBarPixelWidth, 0.1, "bar width uses closest sorted x values");
+        assert.closeTo((<any> barPlot)._getBarPixelWidth(), expectedBarPixelWidth, 0.1, "bar width uses closest sorted x values");
         svg.remove();
       });
     });
@@ -309,7 +287,7 @@ describe("Plots", () => {
       it("bar width takes an appropriate value", () => {
         var timeFormatter = d3.time.format("%m/%d/%y");
         var expectedBarWidth = (xScale.scale(timeFormatter.parse("12/01/94")) - xScale.scale(timeFormatter.parse("12/01/93"))) * 0.95;
-        assert.closeTo(barPlot._getBarPixelWidth(), expectedBarWidth, 0.1, "width is difference between two dates");
+        assert.closeTo((<any> barPlot)._getBarPixelWidth(), expectedBarWidth, 0.1, "width is difference between two dates");
         svg.remove();
       });
 
@@ -340,11 +318,13 @@ describe("Plots", () => {
         barPlot.addDataset(dataset);
         barPlot.animate(false);
         barPlot.baseline(0);
+        barPlot.project("x", "x", xScale);
+        barPlot.project("y", "y", yScale);
         barPlot.renderTo(svg);
       });
 
       it("renders correctly", () => {
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         assert.lengthOf(bars[0], 3, "One bar was created per data point");
         var bar0 = d3.select(bars[0][0]);
@@ -369,7 +349,7 @@ describe("Plots", () => {
       it("baseline value can be changed; barPlot updates appropriately", () => {
         barPlot.baseline(-1);
 
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
@@ -388,7 +368,7 @@ describe("Plots", () => {
 
       it("bar alignment can be changed; barPlot updates appropriately", () => {
         barPlot.barAlignment("center");
-        var renderArea = barPlot._renderArea;
+        var renderArea = (<any> barPlot)._renderArea;
         var bars = renderArea.selectAll("rect");
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
@@ -398,7 +378,7 @@ describe("Plots", () => {
         assert.equal(numAttr(bar1, "y"), 250, "bar1 y is correct");
 
         barPlot.barAlignment("bottom");
-        renderArea = barPlot._renderArea;
+        renderArea = (<any> barPlot)._renderArea;
         bars = renderArea.selectAll("rect");
         bar0 = d3.select(bars[0][0]);
         bar1 = d3.select(bars[0][1]);
@@ -440,14 +420,16 @@ describe("Plots", () => {
         barPlot.baseline(0);
         barPlot.animate(false);
         var yAxis = new Plottable.Axis.Category(yScale, "left");
-        var table = new Plottable.Component.Table([[yAxis, barPlot]]).renderTo(svg);
+        barPlot.project("x", "x", xScale);
+        barPlot.project("y", "y", yScale);
+        new Plottable.Component.Table([[yAxis, barPlot]]).renderTo(svg);
         axisWidth = yAxis.width();
         bandWidth = yScale.rangeBand();
         xScale.domainer(xScale.domainer().pad(0));
       });
 
       it("renders correctly", () => {
-        var bars = barPlot._renderArea.selectAll("rect");
+        var bars = (<any> barPlot)._renderArea.selectAll("rect");
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
         var bar0y = bar0.data()[0].y;
@@ -465,7 +447,7 @@ describe("Plots", () => {
       });
 
       it("width projector may be overwritten, and calling project queues rerender", () => {
-        var bars = barPlot._renderArea.selectAll("rect");
+        var bars = (<any> barPlot)._renderArea.selectAll("rect");
         var bar0 = d3.select(bars[0][0]);
         var bar1 = d3.select(bars[0][1]);
         var bar0y = bar0.data()[0].y;
@@ -497,6 +479,8 @@ describe("Plots", () => {
         yScale = new Plottable.Scale.Linear();
         plot = new Plottable.Plot.VerticalBar<string>(xScale, yScale);
         plot.addDataset(dataset);
+        plot.project("x", "x", xScale);
+        plot.project("y", "y", yScale);
       });
 
       it("bar labels disabled by default", () => {
@@ -537,15 +521,14 @@ describe("Plots", () => {
         svg.remove();
       });
 
-      it("bar labels are removed instantly on dataset change, even if animation is enabled", (done) => {
+      it("bar labels are removed instantly on dataset change", (done) => {
         plot.barLabelsEnabled(true);
-        plot.animate(true);
         plot.renderTo(svg);
         var texts = svg.selectAll("text")[0].map((n: any) => d3.select(n).text());
         assert.lengthOf(texts, 2, "both texts drawn");
-        var originalDrawLabels = plot._drawLabels;
+        var originalDrawLabels = (<any> plot)._drawLabels;
         var called = false;
-        plot._drawLabels = () => {
+        (<any> plot)._drawLabels = () => {
           if (!called) {
             originalDrawLabels.apply(plot);
             texts = svg.selectAll("text")[0].map((n: any) => d3.select(n).text());
@@ -559,6 +542,60 @@ describe("Plots", () => {
         texts = svg.selectAll("text")[0].map((n: any) => d3.select(n).text());
         assert.lengthOf(texts, 0, "texts were immediately removed");
       });
+    });
+
+    describe("getAllBars()", () => {
+      var verticalBarPlot: Plottable.Plot.VerticalBar<string>;
+      var dataset: Plottable.Dataset;
+      var svg: D3.Selection;
+
+      beforeEach(() => {
+        svg = generateSVG();
+        dataset = new Plottable.Dataset();
+        var xScale = new Plottable.Scale.Ordinal();
+        var yScale = new Plottable.Scale.Linear();
+        verticalBarPlot = new Plottable.Plot.VerticalBar<string>(xScale, yScale);
+        verticalBarPlot.project("x", "x", xScale);
+        verticalBarPlot.project("y", "y", yScale);
+      });
+
+      it("getAllBars works in the normal case", () => {
+        dataset.data([{x: "foo", y: 5}, {x: "bar", y: 640}, {x: "zoo", y: 12345}]);
+        verticalBarPlot.addDataset(dataset);
+        verticalBarPlot.renderTo(svg);
+        var bars = verticalBarPlot.getAllBars();
+        assert.lengthOf(bars[0], 3, "three bars in the bar plot");
+        svg.remove();
+      });
+
+
+      it("getAllBars returns 0 bars if there are no bars", () => {
+        verticalBarPlot.addDataset(dataset);
+        verticalBarPlot.renderTo(svg);
+        var bars = verticalBarPlot.getAllBars();
+        assert.lengthOf(bars[0], 0, "zero bars in the bar plot");
+        svg.remove();
+      });
+
+    });
+
+    it("plot auto domain scale to visible points on ordinal scale", () => {
+      var svg = generateSVG(500, 500);
+      var xAccessor = (d: any, i: number, u: any) => d.a;
+      var yAccessor = (d: any, i: number, u: any) => d.b + u.foo;
+      var simpleDataset = new Plottable.Dataset([{a: "a", b: 6}, {a: "b", b: 2}, {a: "c", b: -2}, {a: "d", b: -6}], {foo: 0});
+      var xScale = new Plottable.Scale.Ordinal();
+      var yScale = new Plottable.Scale.Linear();
+      var plot = new Plottable.Plot.Bar(xScale, yScale);
+      plot.addDataset(simpleDataset)
+          .project("x", xAccessor, xScale)
+          .project("y", yAccessor, yScale)
+          .renderTo(svg);
+      xScale.domain(["b", "c"]);
+      assert.deepEqual(yScale.domain(), [-7, 7], "domain has not been adjusted to visible points");
+      plot.automaticallyAdjustYScaleOverVisiblePoints(true);
+      assert.deepEqual(yScale.domain(), [-2.5, 2.5], "domain has been adjusted to visible points");
+      svg.remove();
     });
   });
 });

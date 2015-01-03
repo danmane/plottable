@@ -3,16 +3,17 @@
 module Plottable {
 export module _Drawer {
   export class Area extends Line {
-    private areaSelection: D3.Selection;
+    private _areaSelection: D3.Selection;
     private _drawLine = true;
 
-    public _enterData(data: any[]) {
+    protected _enterData(data: any[]) {
       if (this._drawLine) {
         super._enterData(data);
       } else {
-        AbstractDrawer.prototype._enterData.call(this, data);
+        // HACKHACK Forced to use anycast to access protected var
+        (<any> AbstractDrawer).prototype._enterData.call(this, data);
       }
-      this.areaSelection.datum(data);
+      this._areaSelection.datum(data);
     }
 
     /**
@@ -26,7 +27,7 @@ export module _Drawer {
     }
 
     public setup(area: D3.Selection) {
-      this.areaSelection = area.append("path")
+      this._areaSelection = area.append("path")
                                .classed("area", true)
                                .style({ "stroke": "none" });
       if (this._drawLine) {
@@ -36,10 +37,10 @@ export module _Drawer {
       }
     }
 
-    private createArea(xFunction: AppliedAccessor,
-                       y0Function: AppliedAccessor,
-                       y1Function: AppliedAccessor,
-                       definedFunction: (d: any, i: number) => boolean) {
+    private _createArea(xFunction: _AppliedProjector,
+                       y0Function: _AppliedProjector,
+                       y1Function: _AppliedProjector,
+                       definedFunction: _AppliedProjector) {
       if(!definedFunction) {
         definedFunction = () => true;
       }
@@ -51,14 +52,14 @@ export module _Drawer {
                    .defined(definedFunction);
     }
 
-    public _drawStep(step: DrawStep) {
+    protected _drawStep(step: AppliedDrawStep) {
       if (this._drawLine) {
         super._drawStep(step);
       } else {
-        AbstractDrawer.prototype._drawStep.call(this, step);
+        // HACKHACK Forced to use anycast to access protected var
+        (<any> AbstractDrawer).prototype._drawStep.call(this, step);
       }
-
-      var attrToProjector = <AttributeToProjector>_Util.Methods.copyMap(step.attrToProjector);
+      var attrToProjector = <_AttributeToAppliedProjector>_Util.Methods.copyMap(step.attrToProjector);
       var xFunction       = attrToProjector["x"];
       var y0Function      = attrToProjector["y0"];
       var y1Function      = attrToProjector["y"];
@@ -66,16 +67,16 @@ export module _Drawer {
       delete attrToProjector["x"];
       delete attrToProjector["y0"];
       delete attrToProjector["y"];
-
-      attrToProjector["d"] = this.createArea(xFunction, y0Function, y1Function, attrToProjector["defined"]);
       if (attrToProjector["defined"]) {
         delete attrToProjector["defined"];
       }
 
+      attrToProjector["d"] = this._createArea(xFunction, y0Function, y1Function, definedFunction);
+
       if (attrToProjector["fill"]) {
-        this.areaSelection.attr("fill", attrToProjector["fill"]); // so colors don't animate
+        this._areaSelection.attr("fill", attrToProjector["fill"]); // so colors don't animate
       }
-      step.animator.animate(this.areaSelection, attrToProjector);
+      step.animator.animate(this._areaSelection, attrToProjector);
     }
   }
 }
